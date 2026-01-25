@@ -1,6 +1,6 @@
 import pytest
 import re
-from unittest.mock import AsyncMock, MagicMock, patch, ANY
+from unittest.mock import AsyncMock, MagicMock, patch, Mock, ANY
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update
@@ -19,6 +19,13 @@ from handlers.download import (
 )
 from downloaders import detect_platform
 from database import User, Download
+
+@pytest.fixture(autouse=True)
+def mock_database():
+    """Автоматически мокать database при запуске тестов."""
+    with patch('database.engine', new=Mock()):
+        with patch('database.get_db', new=lambda: Mock()):
+            yield
 
 @pytest.fixture
 def mock_message():
