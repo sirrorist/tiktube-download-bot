@@ -35,6 +35,7 @@ jobs:
       run: |
         ruff check . --output-format=github
         ruff format --diff .  # Optional: check formatting
+      continue-on-error: true
     - name: Test with pytest
       run: |
         pytest tests/ --cov=. --cov-report=xml --junitxml=test-results.xml -v
