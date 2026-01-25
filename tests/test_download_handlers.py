@@ -5,8 +5,10 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update
 
-# Настройка pytest для импорта
 import sys
+with patch('sqlalchemy.dialects.postgresql.psycopg2') as mock_psycopg2:
+    sys.modules['sqlalchemy.dialects.postgresql.psycopg2'] = mock_psycopg2
+
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,14 +20,12 @@ from handlers.download import (
 from downloaders import detect_platform
 from database import User, Download
 
-
 @pytest.fixture
 def mock_message():
     """Фикстура для mock-сообщения."""
     mock = AsyncMock(spec=Message)
     mock.text = "https://www.tiktok.com/@aliushkaa1/video/7593764380861385991"
     return mock
-
 
 @pytest.fixture
 def mock_user():
@@ -35,7 +35,6 @@ def mock_user():
     user.downloads_today = 0
     user.total_downloads = 10
     return user
-
 
 @pytest.mark.asyncio
 async def test_url_patterns():
