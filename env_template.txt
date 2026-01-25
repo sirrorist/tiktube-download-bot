@@ -1,0 +1,37 @@
+# Telegram Bot Configuration
+BOT_TOKEN=your_bot_token_here
+BOT_USERNAME=your_bot_username
+
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/content_downloader
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=content_downloader
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Application Settings
+DEBUG=False
+LOG_LEVEL=INFO
+MAX_FILE_SIZE_MB=100
+TEMP_DIR=./temp
+STORAGE_DIR=./storage
+
+# Rate Limiting
+FREE_USER_LIMIT=7
+PREMIUM_USER_LIMIT=1000
+
+# API Keys (optional, для некоторых платформ)
+TWITTER_API_KEY=
+TWITTER_API_SECRET=
+INSTAGRAM_USERNAME=
+INSTAGRAM_PASSWORD=
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8001
+WEBHOOK_URL=https://yourdomain.com/webhook
+
+# Monitoring
+SENTRY_DSN=
