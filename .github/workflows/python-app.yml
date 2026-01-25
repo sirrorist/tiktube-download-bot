@@ -43,7 +43,7 @@ jobs:
     - name: Test with pytest
       env:
         BOT_TOKEN: test_token
-        DATABASE_URL: postgresql://test
+        DATABASE_URL: postgresql+asyncpg://test
       run: |
         pytest tests/ --junitxml=test-results-${{ matrix.python-version }}.xml -v --tb=short
       continue-on-error: true  # Keep workflow green while fixing
