@@ -88,9 +88,20 @@ async def main():
         )
         webhook_requests_handler.register(app, path="/webhook")
         setup_application(app, dp, bot=bot)
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, settings.host, settings.port)
+        await site.start()
         
         logger.info(f"Starting webhook server on {settings.host}:{settings.port}")
-        web.run_app(app, host=settings.host, port=settings.port)
+
+        # Держим сервер запущенным
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        finally:
+            await runner.cleanup()
     else:
         # Polling mode (for development)
         logger.info("Starting bot in polling mode...")

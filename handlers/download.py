@@ -107,6 +107,7 @@ async def handle_url(message: Message, user: User = None, rate_limited: bool = F
             await processing_msg.edit_text(
                 f"❌ Ошибка при скачивании: {result.get('error', 'Неизвестная ошибка')}"
             )
+            logger.info("Download failed for user {user.id} from {platform}: {result.get('error')}")
             return
         
         # Send file
