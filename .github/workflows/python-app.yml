@@ -38,7 +38,7 @@ jobs:
         pip install ruff
         ruff check . --output-format=github  # Fails on errors
         ruff format --diff .  # Optional: check formatting
-      continue-on-error: true  # Keep workflow green while fixing
+      # continue-on-error: true
 
     - name: Test with pytest
       env:
@@ -46,7 +46,7 @@ jobs:
         DATABASE_URL: postgresql+asyncpg://test
       run: |
         pytest tests/ --junitxml=test-results-${{ matrix.python-version }}.xml -v --tb=short
-      continue-on-error: true  # Keep workflow green while fixing
+      # continue-on-error: true
 
     - name: Upload test results
       if: always()

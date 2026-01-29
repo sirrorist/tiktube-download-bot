@@ -1,9 +1,7 @@
 """Statistics handlers."""
 from aiogram import Router, F, Dispatcher
-from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, User, Download
 
@@ -64,7 +62,7 @@ async def show_stats(message_or_query, user: User = None):
         f"👤 Пользователь: {user.first_name or 'Неизвестно'}\n"
         f"⭐ Статус: {'Premium' if user.is_premium else 'Бесплатный'}\n\n"
         f"📥 <b>Скачивания:</b>\n"
-        f"• Всего: {user.total_downloads}\n"
+        f"• Всего: {total_downloads}\n"
         f"• Сегодня: {limit}\n"
         f"• Общий объем: {total_size_gb:.2f} GB\n\n"
         f"📈 <b>По платформам:</b>\n{platform_text}"

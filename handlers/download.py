@@ -1,12 +1,11 @@
 """Download handlers."""
 import re
 from aiogram import Router, F, Dispatcher
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, FSInputFile
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update
-from datetime import datetime
+from loguru import logger
 
 from database import get_db, User, Download
 from downloaders import (

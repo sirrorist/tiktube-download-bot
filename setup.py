@@ -1,5 +1,5 @@
 """Setup script to initialize directories and check dependencies."""
-import os
+# import os
 from pathlib import Path
 
 

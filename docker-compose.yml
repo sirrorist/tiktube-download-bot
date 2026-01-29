@@ -54,6 +54,21 @@ services:
       retries: 5
     networks:
       - app-network
+  
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: tiktube_download_adminer
+    restart: unless-stopped
+    ports:
+      - "8084:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=db
+      - ADMINER_DESIGN=nette
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
 
 volumes:
   postgres_data:

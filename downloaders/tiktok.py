@@ -1,10 +1,7 @@
 """TikTok downloader."""
 import os
-import aiohttp
-import aiofiles
 from pathlib import Path
 from typing import Dict, Any
-import re
 
 from config import settings
 

@@ -1,6 +1,6 @@
 """Premium handlers."""
 from aiogram import Router, F, Dispatcher
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -64,7 +64,7 @@ async def show_premium(message_or_query, user=None):
 @router.callback_query(F.data.startswith("premium_"))
 async def handle_premium_payment(callback: CallbackQuery):
     """Handle premium payment."""
-    period = callback.data.split("_")[1]  # month or year
+    # period = callback.data.split("_")[1]  # month or year
     
     # Here would integration with Telegram Payments
     # For now, just shows a message

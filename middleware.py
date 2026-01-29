@@ -2,8 +2,7 @@
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User as TgUser
-from datetime import datetime, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
 from sqlalchemy import select, update
 
 from database import get_db, User

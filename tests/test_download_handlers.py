@@ -1,9 +1,8 @@
 import pytest
 import re
-from unittest.mock import AsyncMock, MagicMock, patch, Mock, ANY
+from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from aiogram.types import Message
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import update
+# from sqlalchemy import update
 
 import sys
 with patch('sqlalchemy.dialects.postgresql.psycopg2') as mock_psycopg2:
@@ -13,12 +12,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from handlers.download import (
-    URL_PATTERNS, 
-    handle_url, 
-    download_menu
+    URL_PATTERNS 
+    # handle_url, 
+    # download_menu
 )
-from downloaders import detect_platform
-from database import User, Download
+# from downloaders import detect_platform
+from database import User
 
 @pytest.fixture(autouse=True)
 def mock_database():
