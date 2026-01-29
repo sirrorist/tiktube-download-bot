@@ -7,6 +7,7 @@ yt-dlp==2025.12.8
 tiktokapi==5.2.0
 instaloader==4.10.3
 tweepy==4.14.0
+ffmpeg-python==0.2.0
 
 # Database
 asyncpg==0.29.0
