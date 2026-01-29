@@ -1,10 +1,11 @@
 """Download handlers."""
 import re
+from html import escape
 from aiogram import Router, F, Dispatcher
 from aiogram.types import Message, FSInputFile
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy import update
+from sqlalchemy import update, select
 from loguru import logger
 
 from database import get_db, User, Download
@@ -64,6 +65,10 @@ async def handle_url(message: Message, user: User = None, rate_limited: bool = F
     if not user:
         return  # User not found, skip
     
+    # Сохраняем user_id, потому что объект user detached
+    user_id = user.id
+    user_is_premium = user.is_premium
+    
     if rate_limited:
         keyboard = InlineKeyboardBuilder()
         keyboard.button(text="⭐ Получить Premium", callback_data="premium")
@@ -106,7 +111,7 @@ async def handle_url(message: Message, user: User = None, rate_limited: bool = F
             await processing_msg.edit_text(
                 f"❌ Ошибка при скачивании: {result.get('error', 'Неизвестная ошибка')}"
             )
-            logger.info("Download failed for user {user.id} from {platform}: {result.get('error')}")
+            logger.info(f"Download failed for user {user_id} from {platform}: {result.get('error')}")
             return
         
         # Send file
@@ -139,32 +144,34 @@ async def handle_url(message: Message, user: User = None, rate_limited: bool = F
         # Update user stats
         async for session in get_db():
             # Refresh user to get current values
-            await session.refresh(user, ['downloads_today', 'total_downloads'])
+            result = await session.execute(
+                select(User).where(User.id == user_id)
+            )
+            fresh_user = result.scalar_one_or_none()
             
-            await session.execute(
-                update(User)
-                .where(User.id == user.id)
-                .values(
-                    downloads_today=user.downloads_today + 1,
-                    total_downloads=user.total_downloads + 1
+            if fresh_user:
+                # fresh_user attached into current session
+                fresh_user.downloads_today += 1
+                fresh_user.total_downloads += 1
+                
+                # Save download history
+                download = Download(
+                    user_id=user_id,
+                    platform=platform,
+                    url=text,
+                    content_type=result["content_type"],
+                    file_size=result.get("file_size"),
+                    status="completed"
                 )
-            )
-            
-            # Save download history
-            download = Download(
-                user_id=user.id,
-                platform=platform,
-                url=text,
-                content_type=result["content_type"],
-                file_size=result.get("file_size"),
-                status="completed"
-            )
-            session.add(download)
-            await session.commit()
+                session.add(download)
+                await session.commit()
             break
         
     except Exception as e:
-        await processing_msg.edit_text(f"❌ Произошла ошибка: {str(e)}")
-        # Log error
-        import logging
-        logging.error(f"Download error: {e}", exc_info=True)
+        logger.error(f"Download error: {e}", exc_info=True)
+        # Экранируем HTML-сущности для безопасной отправки в Telegram
+        safe_error = escape(str(e))
+        await processing_msg.edit_text(
+            f"❌ Произошла ошибка:\n<code>{safe_error}</code>",
+            parse_mode="HTML"
+        )

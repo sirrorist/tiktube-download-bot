@@ -25,13 +25,23 @@ async def show_stats(message_or_query, user: User = None):
         else:
             await message_or_query.answer(text)
         return
+    
+    # user detached, get user ID
+    user_id = user.id
+    
     async for session in get_db():
+        # Load user again to get fresh data
+        user_result = await session.execute(
+            select(User).where(User.id == user_id)
+        )
+        fresh_user = user_result.scalar_one()
+        
         # Get download statistics
         result = await session.execute(
             select(
                 func.count(Download.id).label("total"),
                 func.sum(Download.file_size).label("total_size")
-            ).where(Download.user_id == user.id)
+            ).where(Download.user_id == user_id)
         )
         stats = result.first()
         
@@ -41,7 +51,7 @@ async def show_stats(message_or_query, user: User = None):
                 Download.platform,
                 func.count(Download.id).label("count")
             )
-            .where(Download.user_id == user.id)
+            .where(Download.user_id == user_id)
             .group_by(Download.platform)
         )
         platforms = platform_stats.all()
@@ -55,12 +65,12 @@ async def show_stats(message_or_query, user: User = None):
         for platform, count in platforms
     ]) if platforms else "Нет скачиваний"
     
-    limit = "∞" if user.is_premium else f"{user.downloads_today}/{7}"
+    limit = "∞" if fresh_user.is_premium else f"{fresh_user.downloads_today}/7"
     
     text = (
         f"📊 <b>Ваша статистика</b>\n\n"
-        f"👤 Пользователь: {user.first_name or 'Неизвестно'}\n"
-        f"⭐ Статус: {'Premium' if user.is_premium else 'Бесплатный'}\n\n"
+        f"👤 Пользователь: {fresh_user.first_name or 'Неизвестно'}\n"
+        f"⭐ Статус: {'Premium' if fresh_user.is_premium else 'Бесплатный'}\n\n"
         f"📥 <b>Скачивания:</b>\n"
         f"• Всего: {total_downloads}\n"
         f"• Сегодня: {limit}\n"
@@ -69,7 +79,7 @@ async def show_stats(message_or_query, user: User = None):
     )
     
     keyboard = None
-    if not user.is_premium:
+    if not fresh_user.is_premium:
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         keyboard = InlineKeyboardBuilder()
         keyboard.button(text="⭐ Получить Premium", callback_data="premium")

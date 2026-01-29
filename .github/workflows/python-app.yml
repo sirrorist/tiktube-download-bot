@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]  # Test multiple versions
+        python-version: ["3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v5
@@ -26,6 +26,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
+        # cache-dependency-path: '**/ruff.toml'
 
     - name: Install dependencies
       run: |
@@ -36,8 +37,11 @@ jobs:
     - name: Lint with Ruff
       run: |
         pip install ruff
-        ruff check . --output-format=github  # Fails on errors
-        ruff format --diff .  # Optional: check formatting
+        ruff check . --output-format=github --fix
+        ruff format .
+
+        ruff check . --output-format=github
+        ruff format --diff .
       # continue-on-error: true
 
     - name: Test with pytest

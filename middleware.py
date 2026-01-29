@@ -49,6 +49,11 @@ class UserMiddleware(BaseMiddleware):
                 user.last_activity = datetime.utcnow()
                 await session.commit()
             
+            # Make attributes persistent before session closes
+            _ = user.downloads_today  # Trigger lazy load
+            _ = user.total_downloads  # Trigger lazy load
+            _ = user.is_premium  # Trigger lazy load
+            
             data["user"] = user
             break
         
@@ -69,15 +74,18 @@ class RateLimitMiddleware(BaseMiddleware):
         if not user:
             return await handler(event, data)
         
+        user_id = user.id  # Saving ID
+        
         # Reset daily counter if needed
         if user.last_activity and user.last_activity.date() < datetime.utcnow().date():
             async for session in get_db():
                 await session.execute(
                     update(User)
-                    .where(User.id == user.id)
+                    .where(User.id == user_id)
                     .values(downloads_today=0)
                 )
                 await session.commit()
+
                 user.downloads_today = 0
                 break
         
@@ -85,7 +93,6 @@ class RateLimitMiddleware(BaseMiddleware):
         limit = settings.premium_user_limit if user.is_premium else settings.free_user_limit
         
         if user.downloads_today >= limit:
-            # This will be handled in handlers
             data["rate_limited"] = True
         else:
             data["rate_limited"] = False
