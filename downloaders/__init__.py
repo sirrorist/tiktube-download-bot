@@ -1,6 +1,5 @@
 """Downloaders package."""
 import re
-from typing import Optional, Dict, Any
 
 from .tiktok import download_tiktok_video
 from .youtube import download_youtube_video
@@ -17,7 +16,7 @@ URL_PATTERNS = {
 }
 
 
-def detect_platform(url: str) -> Optional[str]:
+def detect_platform(url: str) -> str | None:
     """Detect platform from URL."""
     url_lower = url.lower()
     for platform, pattern in URL_PATTERNS.items():
@@ -26,21 +25,21 @@ def detect_platform(url: str) -> Optional[str]:
     return None
 
 
-async def download_tiktok(url: str) -> Dict[str, Any]:
+async def download_tiktok(url: str) -> dict[str, any]:
     """Download TikTok content."""
     return await download_tiktok_video(url)
 
 
-async def download_youtube(url: str) -> Dict[str, Any]:
+async def download_youtube(url: str) -> dict[str, any]:
     """Download YouTube content."""
     return await download_youtube_video(url)
 
 
-async def download_instagram(url: str) -> Dict[str, Any]:
+async def download_instagram(url: str) -> dict[str, any]:
     """Download Instagram content."""
     return await download_instagram_content(url)
 
 
-async def download_twitter(url: str) -> Dict[str, Any]:
+async def download_twitter(url: str) -> dict[str, any]:
     """Download Twitter/X content."""
     return await download_twitter_content(url)
