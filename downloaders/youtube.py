@@ -131,7 +131,7 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                 title = info.get("title", "YouTube Content")
                 if is_music:
                     uploader = info.get("uploader", "Unknown Artist")
-                    title = f"title} - {uploader}"
+                    title = f"🎵 {title} - {uploader}"
                 else:
                     title = f"🎥 {title}"
 
