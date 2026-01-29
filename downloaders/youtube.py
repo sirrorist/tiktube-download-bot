@@ -17,8 +17,17 @@ async def download_youtube_video(url: str) -> dict[str, any]:
         info_opts = {
             "quiet": True,
             "no_warnings": True,
+            "extract_flat": False,
+            # Используем android client для обхода блокировок
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "android_embedded", "ios"],
+                    "skip": ["hls"],  # Пропускаем проблемные HLS форматы
+                }
+            },
             "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
+                "Accept-Language": "en-US,en;q=0.9",
             },
         }
 
@@ -39,22 +48,22 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                     "error": "❌ Прямые трансляции не поддерживаются. Дождитесь окончания и попробуйте снова.",
                 }
 
-            # Проверка длительности (лимит 30 минут)
+            # Проверка длительности (лимит 20 минут)
             duration = info.get("duration", 0)
-            if duration > 1800:  # 30 минут
+            if duration > 1200:  # 20 минут
                 return {
                     "success": False,
-                    "error": f"Видео слишком длинное ({duration // 60} мин). Максимум: 30 минут",
+                    "error": f"Видео слишком длинное ({duration // 60} мин). Максимум: 20 минут",
                 }
 
-            # Музыка или видео?
+            # ОПРЕДЕЛЕНИЕ: Музыка или видео?
             is_music = _is_music_content(info)
 
             # Формируем параметры скачивания в зависимости от типа контента
             if is_music:
-                # Для музыки
+                # Для музыки: только аудио в хорошем качестве
                 ydl_opts = {
-                    "format": "bestaudio[ext=m4a]/bestaudio/best",
+                    "format": "bestaudio/best",
                     "outtmpl": str(output_dir / "youtube_audio_%(id)s.%(ext)s"),
                     "postprocessors": [
                         {
@@ -63,36 +72,44 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                             "preferredquality": "192",
                         }
                     ],
-                    "writethumbnail": True,  # Скачиваем обложку
-                    "postprocessor_args": [
-                        "-metadata",
-                        f"title={info.get('title', 'Unknown')}",
-                        "-metadata",
-                        f"artist={info.get('uploader', 'Unknown')}",
-                    ],
+                    # Не скачиваем thumbnail - часто вызывает 403
+                    "writethumbnail": False,
+                    "embedthumbnail": False,
                 }
                 content_type = "audio"
             else:
-                # Для видео
+                # Для видео: видео + аудио
                 ydl_opts = {
-                    "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best",
+                    # Используем комбинированные форматы или fallback на best
+                    "format": "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]/best",
                     "outtmpl": str(output_dir / "youtube_video_%(id)s.%(ext)s"),
                     "merge_output_format": "mp4",
                 }
                 content_type = "video"
 
-            # Общие параметры для обоих типов
+            # Общие параметры для обоих типов (КРИТИЧЕСКИ ВАЖНО!)
             ydl_opts.update(
                 {
                     "quiet": False,
                     "no_warnings": False,
                     "ignoreerrors": False,
-                    # User-Agent для обхода блокировок YouTube
+                    # Используем Android client для обхода блокировок
+                    "extractor_args": {
+                        "youtube": {
+                            "player_client": [
+                                "android",
+                                "android_embedded",
+                                "ios",
+                            ],  # Приоритет клиентов
+                            "skip": ["hls", "dash"],  # Пропускаем проблемные форматы
+                        }
+                    },
+                    # User-Agent Android YouTube app
                     "http_headers": {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language": "en-us,en;q=0.5",
-                        "Sec-Fetch-Mode": "navigate",
+                        "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
+                        "Accept": "*/*",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Accept-Encoding": "gzip, deflate",
                     },
                     # Повторные попытки
                     "retries": 10,
@@ -100,9 +117,12 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                     "skip_unavailable_fragments": True,
                     # Лимит размера для Telegram (50MB)
                     "max_filesize": 50 * 1024 * 1024,
-                    # Использовать aria2c если доступен (опционально)
-                    # 'external_downloader': 'aria2c',
-                    # 'external_downloader_args': ['-x', '16', '-s', '16', '-k', '1M'],
+                    # Не проверять сертификаты (иногда помогает)
+                    "nocheckcertificate": True,
+                    # Предпочитать свободные форматы
+                    "prefer_free_formats": True,
+                    # Geo bypass
+                    "geo_bypass": True,
                 }
             )
 
@@ -127,7 +147,7 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                 if file_size == 0:
                     return {"success": False, "error": "Скачанный файл пустой"}
 
-                # Формируем название
+                # Формируем красивое название
                 title = info.get("title", "YouTube Content")
                 if is_music:
                     uploader = info.get("uploader", "Unknown Artist")
@@ -145,28 +165,41 @@ async def download_youtube_video(url: str) -> dict[str, any]:
 
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e)
-        if "HTTP Error 403" in error_msg:
+        if "HTTP Error 403" in error_msg or "Forbidden" in error_msg:
             return {
                 "success": False,
-                "error": "YouTube заблокировал доступ. Попробуйте позже или используйте другую ссылку.",
+                "error": "⚠️ YouTube временно ограничил доступ. Попробуйте:\n"
+                "1. Подождать 1-2 минуты\n"
+                "2. Использовать другую ссылку\n"
+                "3. Скопировать ссылку заново",
             }
         elif "Video unavailable" in error_msg:
-            return {"success": False, "error": "Видео недоступно или удалено"}
+            return {"success": False, "error": "❌ Видео недоступно или удалено"}
         elif "Requested format is not available" in error_msg:
             return {
                 "success": False,
-                "error": "Запрашиваемый формат недоступен. Попробуйте другое видео.",
+                "error": "❌ Запрашиваемый формат недоступен. Попробуйте другое видео.",
+            }
+        elif "Private video" in error_msg:
+            return {"success": False, "error": "❌ Это приватное видео"}
+        elif "Sign in to confirm your age" in error_msg:
+            return {
+                "success": False,
+                "error": "❌ Видео с возрастным ограничением. Скачивание недоступно.",
             }
         else:
-            return {"success": False, "error": f"Ошибка загрузки: {error_msg}"}
+            return {"success": False, "error": f"⚠️ Ошибка YouTube: {error_msg[:100]}"}
     except Exception as e:
-        return {"success": False, "error": f"Неизвестная ошибка: {str(e)}"}
+        return {
+            "success": False,
+            "error": f"⚠️ Неизвестная ошибка: {str(e)[:100]}",
+        }
 
 
 def _is_music_content(info: dict) -> bool:
     """
     Определяет, является ли контент музыкой.
-    
+
     Проверяет:
     - Категорию видео (Music)
     - Наличие в названии музыкальных слов
@@ -200,6 +233,8 @@ def _is_music_content(info: dict) -> bool:
         "ost",
         "soundtrack",
         "original sound",
+        "music video",
+        "mv",
     ]
     if any(keyword in title for keyword in music_keywords):
         return True
@@ -222,7 +257,7 @@ def _is_music_content(info: dict) -> bool:
         # Дополнительная проверка: если короткое И есть музыкальные теги
         tags = info.get("tags", [])
         music_tags = ["music", "song", "audio", "official"]
-        if any(tag.lower() in music_tags for tag in tags):
+        if tags and any(tag.lower() in music_tags for tag in tags):
             return True
 
     # По умолчанию - видео
