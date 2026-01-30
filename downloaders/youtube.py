@@ -1,17 +1,61 @@
-"""YouTube downloader."""
+"""YouTube downloader with automatic PO Token management."""
 import os
 from pathlib import Path
 
+from loguru import logger
+
 from config import settings
+from utils.po_token_cache import POTokenCache
+from downloaders.po_token_manager import POTokenGenerator
+
+
+# Инициализация менеджера токенов (глобально)
+_po_token_cache = POTokenCache(cache_file="storage/po_token_cache.json")
+
+
+def _get_po_token(client: str = "android") -> str:
+    """
+    Получить актуальный PO Token с автообновлением.
+
+    Args:
+        client: Тип клиента (android, ios)
+
+    Returns:
+        PO Token (может быть пустым)
+    """
+    # Пытаемся получить из кэша
+    token = _po_token_cache.get_token(client)
+
+    if token:
+        return token
+
+    # Токен истёк или отсутствует - генерируем новый
+    logger.info(f"PO Token for {client} not found or expired, generating new...")
+
+    new_token = POTokenGenerator.generate_from_ytdlp(client)
+
+    if new_token:
+        # Сохраняем в кэш на 3 дня
+        _po_token_cache.set_token(client, new_token, ttl_days=3)
+        return new_token
+    else:
+        # Fallback - работаем без токена
+        logger.warning(
+            f"Failed to generate PO Token for {client}, using fallback"
+        )
+        return POTokenGenerator.generate_fallback()
 
 
 async def download_youtube_video(url: str) -> dict[str, any]:
-    """Download YouTube video or audio."""
+    """Download YouTube video or audio with automatic PO Token."""
     try:
         import yt_dlp
 
         output_dir = Path(settings.temp_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Автоматически получаем актуальный PO Token
+        po_token_android = _get_po_token("android")
 
         # Получаем информацию о видео
         info_opts = {
@@ -31,6 +75,12 @@ async def download_youtube_video(url: str) -> dict[str, any]:
             },
         }
 
+        # Добавляем PO Token если есть
+        if po_token_android:
+            info_opts["extractor_args"]["youtube"]["po_token"] = [
+                f"android.gvs+{po_token_android}"
+            ]
+
         with yt_dlp.YoutubeDL(info_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
@@ -42,16 +92,15 @@ async def download_youtube_video(url: str) -> dict[str, any]:
 
             # Проверка: Прямая трансляция запрещена
             is_live = info.get("is_live", False)
-            was_live = info.get("was_live", False)  # Проверка закончившейся трансляции
-            live_status = info.get("live_status")  # Статус: is_live, was_live, not_live, post_live
-            
+            was_live = info.get("was_live", False)
+            live_status = info.get("live_status")
+
             if is_live or live_status == "is_live":
                 return {
                     "success": False,
                     "error": "❌ Прямые трансляции не поддерживаются.",
                 }
             
-            # Проверка на post_live (только что закончившаяся трансляция)
             if live_status == "post_live":
                 return {
                     "success": False,
@@ -62,7 +111,6 @@ async def download_youtube_video(url: str) -> dict[str, any]:
             # Доп проверка: Доступность форматов
             formats = info.get("formats", [])
             if not formats or len(formats) == 0:
-                # Может это всё ещё live/upcoming
                 if was_live or info.get("is_upcoming"):
                     return {
                         "success": False,
@@ -90,12 +138,12 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                     "error": f"Видео слишком длинное ({duration // 60} мин). Максимум: 20 минут",
                 }
 
-            # ОПРЕДЕЛЕНИЕ: Музыка или видео?
+            # Определение: Музыка или видео?
             is_music = _is_music_content(info)
 
             # Формируем параметры скачивания в зависимости от типа контента
             if is_music:
-                # Для музыки: только аудио в хорошем качестве
+                # Для музыки
                 ydl_opts = {
                     "format": "bestaudio/best",
                     "outtmpl": str(output_dir / "youtube_audio_%(id)s.%(ext)s"),
@@ -112,7 +160,7 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                 }
                 content_type = "audio"
             else:
-                # Для видео: видео + аудио
+                # Для видео
                 ydl_opts = {
                     # Используем комбинированные форматы или fallback на best
                     "format": "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]/best",
@@ -121,7 +169,7 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                 }
                 content_type = "video"
 
-            # Общие параметры для обоих типов (КРИТИЧЕСКИ ВАЖНО!)
+            # Общие параметры
             ydl_opts.update(
                 {
                     "quiet": False,
@@ -149,16 +197,19 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                     "retries": 10,
                     "fragment_retries": 10,
                     "skip_unavailable_fragments": True,
-                    # Лимит размера для Telegram (50MB)
                     "max_filesize": 50 * 1024 * 1024,
-                    # Не проверять сертификаты (иногда помогает)
                     "nocheckcertificate": True,
-                    # Предпочитать свободные форматы
                     "prefer_free_formats": True,
-                    # Geo bypass
                     "geo_bypass": True,
                 }
             )
+
+            # Добавляем PO Token если есть
+            if po_token_android:
+                ydl_opts["extractor_args"]["youtube"]["po_token"] = [
+                    f"android.gvs+{po_token_android}"
+                ]
+                logger.debug(f"Using PO Token for download: {po_token_android[:30]}...")
 
             # Скачиваем контент
             with yt_dlp.YoutubeDL(ydl_opts) as ydl_download:
@@ -213,6 +264,8 @@ async def download_youtube_video(url: str) -> dict[str, any]:
             }
         
         if "HTTP Error 403" in error_msg or "Forbidden" in error_msg:
+            # Возможно токен истёк - очищаем кэш
+            _po_token_cache.clear_token("android")
             return {
                 "success": False,
                 "error": "⚠️ YouTube временно ограничил доступ. Попробуйте:\n"
@@ -222,11 +275,6 @@ async def download_youtube_video(url: str) -> dict[str, any]:
             }
         elif "Video unavailable" in error_msg:
             return {"success": False, "error": "❌ Видео недоступно или удалено"}
-        elif "Requested format is not available" in error_msg:
-            return {
-                "success": False,
-                "error": "❌ Запрашиваемый формат недоступен. Попробуйте другое видео.",
-            }
         elif "Private video" in error_msg:
             return {"success": False, "error": "❌ Это приватное видео"}
         elif "Sign in to confirm your age" in error_msg:
@@ -235,11 +283,16 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                 "error": "❌ Видео с возрастным ограничением. Скачивание недоступно.",
             }
         else:
-            return {"success": False, "error": f"⚠️ Ошибка YouTube: {error_msg[:100]}"}
+            return {"success": False, "error": f"⚠️ Ошибка YouTube: {error_msg[:200]}"}
+    except AttributeError:
+        return {
+            "success": False,
+            "error": "⚠️ Ошибка обработки данных видео. Попробуйте другую ссылку.",
+        }
     except Exception as e:
         return {
             "success": False,
-            "error": f"⚠️ Неизвестная ошибка: {str(e)[:100]}",
+            "error": f"⚠️ Неизвестная ошибка: {str(e)[:200]}",
         }
 
 
@@ -255,57 +308,66 @@ def _is_music_content(info: dict) -> bool:
     """
     # Проверка 1: Категория YouTube
     categories = info.get("categories", [])
-    if "Music" in categories:
+    if categories and "Music" in categories:
         return True
 
     # Проверка 2: Жанр
-    genre = info.get("genre", "").lower()
-    if genre and any(
-        music_genre in genre
-        for music_genre in ["music", "song", "audio", "soundtrack", "ost"]
-    ):
-        return True
+    genre = info.get("genre")
+    if genre:
+        genre_lower = str(genre).lower()
+        if any(
+            music_genre in genre_lower
+            for music_genre in ["music", "song", "audio", "soundtrack", "ost"]
+        ):
+            return True
 
     # Проверка 3: Название содержит музыкальные слова
-    title = info.get("title", "").lower()
-    music_keywords = [
-        "official music video",
-        "official video",
-        "official audio",
-        "lyrics",
-        "lyric video",
-        "(audio)",
-        "[audio]",
-        "full album",
-        "ost",
-        "soundtrack",
-        "original sound",
-        "music video",
-        "mv",
-    ]
-    if any(keyword in title for keyword in music_keywords):
-        return True
+    title = info.get("title")
+    if title:
+        title_lower = str(title).lower()
+        music_keywords = [
+            "official music video",
+            "official video",
+            "official audio",
+            "lyrics",
+            "lyric video",
+            "(audio)",
+            "[audio]",
+            "full album",
+            "ost",
+            "soundtrack",
+            "original sound",
+            "music video",
+            "mv",
+        ]
+        if any(keyword in title_lower for keyword in music_keywords):
+            return True
 
     # Проверка 4: Канал музыкальный
-    uploader = info.get("uploader", "").lower()
-    channel_id = info.get("channel_id", "")
-    music_channels = ["vevo", "official", " - topic", "records", "music"]
-
-    if any(marker in uploader for marker in music_channels):
-        return True
-
-    # YouTube Music обычно добавляет " - Topic" к названиям каналов
-    if channel_id and "topic" in uploader:
-        return True
+    uploader = info.get("uploader")
+    channel_id = info.get("channel_id")
+    
+    if uploader:
+        uploader_lower = str(uploader).lower()
+        music_channels = ["vevo", "official", " - topic", "records", "music"]
+        
+        if any(marker in uploader_lower for marker in music_channels):
+            return True
+        
+        # YouTube Music обычно добавляет " - Topic" к названиям каналов
+        if channel_id and "topic" in uploader_lower:
+            return True
 
     # Проверка 5: Длительность (песни обычно < 10 минут)
     duration = info.get("duration", 0)
-    if duration > 0 and duration < 600:  # Меньше 10 минут
+    if duration and 0 < duration < 600:  # Меньше 10 минут и больше 0
         # Дополнительная проверка: если короткое И есть музыкальные теги
         tags = info.get("tags", [])
-        music_tags = ["music", "song", "audio", "official"]
-        if tags and any(tag.lower() in music_tags for tag in tags):
-            return True
+        if tags:
+            music_tags = ["music", "song", "audio", "official"]
+
+            if any(str(tag).lower() in music_tags for tag in tags if tag):
+                return True
 
     # По умолчанию - видео
     return False

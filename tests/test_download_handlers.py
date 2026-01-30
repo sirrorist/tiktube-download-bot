@@ -16,7 +16,6 @@ from handlers.download import (
     # handle_url, 
     # download_menu
 )
-# from downloaders import detect_platform
 from database import User
 
 @pytest.fixture(autouse=True)
