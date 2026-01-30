@@ -13,7 +13,7 @@ async def download_youtube_video(url: str) -> dict[str, any]:
         output_dir = Path(settings.temp_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Сначала получаем информацию о видео БЕЗ скачивания
+        # Получаем информацию о видео
         info_opts = {
             "quiet": True,
             "no_warnings": True,
@@ -22,7 +22,7 @@ async def download_youtube_video(url: str) -> dict[str, any]:
             "extractor_args": {
                 "youtube": {
                     "player_client": ["android", "android_embedded", "ios"],
-                    "skip": ["hls"],  # Пропускаем проблемные HLS форматы
+                    "skip": ["hls"],  # Пропускаем проблемные форматы
                 }
             },
             "http_headers": {
@@ -40,13 +40,47 @@ async def download_youtube_video(url: str) -> dict[str, any]:
                     "error": "Не удалось получить информацию о видео",
                 }
 
-            # ПРОВЕРКА: Прямая трансляция запрещена
+            # Проверка: Прямая трансляция запрещена
             is_live = info.get("is_live", False)
-            if is_live:
+            was_live = info.get("was_live", False)  # Проверка закончившейся трансляции
+            live_status = info.get("live_status")  # Статус: is_live, was_live, not_live, post_live
+            
+            if is_live or live_status == "is_live":
                 return {
                     "success": False,
-                    "error": "❌ Прямые трансляции не поддерживаются. Дождитесь окончания и попробуйте снова.",
+                    "error": "❌ Прямые трансляции не поддерживаются.",
                 }
+            
+            # Проверка на post_live (только что закончившаяся трансляция)
+            if live_status == "post_live":
+                return {
+                    "success": False,
+                    "error": "⏳ Трансляция только что закончилась.\n\n"
+                             "Подождите 5-10 минут, пока YouTube обработает видео.",
+                }
+
+            # Доп проверка: Доступность форматов
+            formats = info.get("formats", [])
+            if not formats or len(formats) == 0:
+                # Может это всё ещё live/upcoming
+                if was_live or info.get("is_upcoming"):
+                    return {
+                        "success": False,
+                        "error": "❌ Видео пока недоступно для скачивания.\n\n"
+                                 "Возможные причины:\n"
+                                 "• Трансляция ещё не началась\n"
+                                 "• Трансляция только что закончилась (подождите 5-10 мин)\n"
+                                 "• Видео обрабатывается YouTube",
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "❌ Форматы видео недоступны.\n\n"
+                                 "Видео может быть:\n"
+                                 "• Приватным\n"
+                                 "• Удалённым\n"
+                                 "• С ограничениями региона",
+                    }
 
             # Проверка длительности (лимит 20 минут)
             duration = info.get("duration", 0)
@@ -165,6 +199,19 @@ async def download_youtube_video(url: str) -> dict[str, any]:
 
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e)
+        
+        # Специфичная обработка ошибки "No video formats found"
+        if "No video formats found" in error_msg or "no formats found" in error_msg.lower():
+            return {
+                "success": False,
+                "error": "❌ Видео недоступно для скачивания.\n\n"
+                         "Возможные причины:\n"
+                         "• Это прямая трансляция (дождитесь окончания)\n"
+                         "• Трансляция только что закончилась (подождите 5-10 мин)\n"
+                         "• Приватное видео или удалено\n"
+                         "• Ограничения по региону",
+            }
+        
         if "HTTP Error 403" in error_msg or "Forbidden" in error_msg:
             return {
                 "success": False,
