@@ -1,7 +1,5 @@
 """Test imports to verify structure."""
 
-# Тест 1: Базовые импорты
-print("Testing basic imports...")
 from downloaders import (
     download_tiktok,
     download_youtube,
@@ -9,6 +7,8 @@ from downloaders import (
     download_twitter,
     detect_platform
 )
+# Тест 1: Базовые импорты
+print("Testing basic imports...")
 print("✅ Basic downloaders imported")
 
 # Тест 2: Utils импорты
