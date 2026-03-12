@@ -184,7 +184,6 @@ async def handle_url(message: Message, user: User = None, rate_limited: bool = F
             exc_info=True,
         )
         # Экранируем HTML-сущности для безопасной отправки в Telegram
-        safe_error = escape(str(e))
         await processing_msg.edit_text(
-            f"❌ Произошла ошибка:\n<code>{safe_error}</code>", parse_mode="HTML"
+            f"❌ Произошла ошибка, простите за неудобства."
         )
